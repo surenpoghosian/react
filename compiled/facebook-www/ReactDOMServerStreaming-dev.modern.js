@@ -4095,7 +4095,7 @@ __DEV__ &&
         null !== error &&
         "string" === typeof error.environmentName
       ) {
-        var badgeName = error.environmentName;
+        var JSCompiler_inline_result = error.environmentName;
         error = [error].slice(0);
         "string" === typeof error[0]
           ? error.splice(
@@ -4103,7 +4103,7 @@ __DEV__ &&
               1,
               "%c%s%c " + error[0],
               "background: #e6e6e6;background: light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.25));color: #000000;color: light-dark(#000000, #ffffff);border-radius: 2px",
-              " " + badgeName + " ",
+              " " + JSCompiler_inline_result + " ",
               ""
             )
           : error.splice(
@@ -4111,10 +4111,12 @@ __DEV__ &&
               0,
               "%c%s%c ",
               "background: #e6e6e6;background: light-dark(rgba(0,0,0,0.1), rgba(255,255,255,0.25));color: #000000;color: light-dark(#000000, #ffffff);border-radius: 2px",
-              " " + badgeName + " ",
+              " " + JSCompiler_inline_result + " ",
               ""
             );
-        console.error.apply(console, error);
+        error.unshift(console);
+        JSCompiler_inline_result = bind.apply(console.error, error);
+        JSCompiler_inline_result();
       } else console.error(error);
       return null;
     }
@@ -5077,26 +5079,26 @@ __DEV__ &&
                 task.keyPath = type;
               }
             } else {
-              newApiName = task.keyPath;
-              type = task.blockedBoundary;
-              var parentHoistableState = task.hoistableState,
-                parentSegment = task.blockedSegment;
-              ref = props.fallback;
-              var content = props.children;
-              props = new Set();
-              _propName = createSuspenseBoundary(request, props);
+              type = task.keyPath;
+              var parentBoundary = task.blockedBoundary,
+                parentHoistableState = task.hoistableState;
+              ref = task.blockedSegment;
+              _propName = props.fallback;
+              props = props.children;
+              var fallbackAbortSet = new Set();
+              propName = createSuspenseBoundary(request, fallbackAbortSet);
               null !== request.trackedPostpones &&
-                (_propName.trackedContentKeyPath = keyPath);
-              propName = createPendingSegment(
+                (propName.trackedContentKeyPath = keyPath);
+              newApiName = createPendingSegment(
                 request,
-                parentSegment.chunks.length,
-                _propName,
+                ref.chunks.length,
+                propName,
                 task.formatContext,
                 !1,
                 !1
               );
-              parentSegment.children.push(propName);
-              parentSegment.lastPushedText = !1;
+              ref.children.push(newApiName);
+              ref.lastPushedText = !1;
               var contentRootSegment = createPendingSegment(
                 request,
                 0,
@@ -5106,72 +5108,100 @@ __DEV__ &&
                 !1
               );
               contentRootSegment.parentFlushed = !0;
-              task.blockedBoundary = _propName;
-              task.hoistableState = _propName.contentState;
-              task.blockedSegment = contentRootSegment;
-              task.keyPath = keyPath;
-              try {
-                if (
-                  (renderNode(request, task, content, -1),
-                  contentRootSegment.lastPushedText &&
-                    contentRootSegment.textEmbedded &&
-                    contentRootSegment.chunks.push("\x3c!-- --\x3e"),
-                  (contentRootSegment.status = 1),
-                  queueCompletedSegment(_propName, contentRootSegment),
-                  0 === _propName.pendingTasks && 0 === _propName.status)
-                ) {
-                  _propName.status = 1;
-                  break a;
+              if (null !== request.trackedPostpones) {
+                newProps = [keyPath[0], "Suspense Fallback", keyPath[2]];
+                defaultProps = [newProps[1], newProps[2], [], null];
+                request.trackedPostpones.workingMap.set(newProps, defaultProps);
+                propName.trackedFallbackNode = defaultProps;
+                task.blockedSegment = newApiName;
+                task.keyPath = newProps;
+                try {
+                  renderNode(request, task, _propName, -1),
+                    newApiName.lastPushedText &&
+                      newApiName.textEmbedded &&
+                      newApiName.chunks.push("\x3c!-- --\x3e"),
+                    (newApiName.status = 1);
+                } finally {
+                  (task.blockedSegment = ref), (task.keyPath = type);
                 }
-              } catch (error$2) {
-                (contentRootSegment.status = 4),
-                  (_propName.status = 4),
-                  (newProps = getThrownInfo(task.componentStack)),
-                  (defaultProps = logRecoverableError(
-                    request,
-                    error$2,
-                    newProps
-                  )),
-                  encodeErrorForBoundary(
-                    _propName,
-                    defaultProps,
-                    error$2,
-                    newProps,
-                    !1
-                  ),
-                  untrackBoundary(request, _propName);
-              } finally {
-                (task.blockedBoundary = type),
-                  (task.hoistableState = parentHoistableState),
-                  (task.blockedSegment = parentSegment),
-                  (task.keyPath = newApiName);
+                task = createRenderTask(
+                  request,
+                  null,
+                  props,
+                  -1,
+                  propName,
+                  contentRootSegment,
+                  propName.contentState,
+                  task.abortSet,
+                  keyPath,
+                  task.formatContext,
+                  task.context,
+                  task.treeContext,
+                  task.componentStack,
+                  task.isFallback
+                );
+                pushComponentStack(task);
+                request.pingedTasks.push(task);
+              } else {
+                task.blockedBoundary = propName;
+                task.hoistableState = propName.contentState;
+                task.blockedSegment = contentRootSegment;
+                task.keyPath = keyPath;
+                try {
+                  if (
+                    (renderNode(request, task, props, -1),
+                    contentRootSegment.lastPushedText &&
+                      contentRootSegment.textEmbedded &&
+                      contentRootSegment.chunks.push("\x3c!-- --\x3e"),
+                    (contentRootSegment.status = 1),
+                    queueCompletedSegment(propName, contentRootSegment),
+                    0 === propName.pendingTasks && 0 === propName.status)
+                  ) {
+                    propName.status = 1;
+                    break a;
+                  }
+                } catch (error$2) {
+                  (contentRootSegment.status = 4),
+                    (propName.status = 4),
+                    (newProps = getThrownInfo(task.componentStack)),
+                    (defaultProps = logRecoverableError(
+                      request,
+                      error$2,
+                      newProps
+                    )),
+                    encodeErrorForBoundary(
+                      propName,
+                      defaultProps,
+                      error$2,
+                      newProps,
+                      !1
+                    ),
+                    untrackBoundary(request, propName);
+                } finally {
+                  (task.blockedBoundary = parentBoundary),
+                    (task.hoistableState = parentHoistableState),
+                    (task.blockedSegment = ref),
+                    (task.keyPath = type);
+                }
+                task = createRenderTask(
+                  request,
+                  null,
+                  _propName,
+                  -1,
+                  parentBoundary,
+                  newApiName,
+                  propName.fallbackState,
+                  fallbackAbortSet,
+                  [keyPath[0], "Suspense Fallback", keyPath[2]],
+                  task.formatContext,
+                  task.context,
+                  task.treeContext,
+                  task.componentStack,
+                  !0
+                );
+                pushComponentStack(task);
+                request.pingedTasks.push(task);
               }
-              newProps = [keyPath[0], "Suspense Fallback", keyPath[2]];
-              defaultProps = request.trackedPostpones;
-              null !== defaultProps &&
-                ((newApiName = [newProps[1], newProps[2], [], null]),
-                defaultProps.workingMap.set(newProps, newApiName),
-                5 === _propName.status
-                  ? (defaultProps.workingMap.get(keyPath)[4] = newApiName)
-                  : (_propName.trackedFallbackNode = newApiName));
-              task = createRenderTask(
-                request,
-                null,
-                ref,
-                -1,
-                type,
-                propName,
-                _propName.fallbackState,
-                props,
-                newProps,
-                task.formatContext,
-                task.context,
-                task.treeContext,
-                task.componentStack,
-                !0
-              );
-              pushComponentStack(task);
-              request.pingedTasks.push(task);
             }
             return;
         }
@@ -7832,6 +7862,7 @@ __DEV__ &&
       LATE = 3,
       regexForHrefInLinkHeaderURLContext = /[<>\r\n]/g,
       regexForLinkHeaderQuotedParamValueContext = /["';,\r\n]/g,
+      bind = Function.prototype.bind,
       REACT_CLIENT_REFERENCE = Symbol.for("react.client.reference"),
       emptyContextObject = {};
     Object.freeze(emptyContextObject);

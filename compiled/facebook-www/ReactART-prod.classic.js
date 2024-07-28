@@ -744,9 +744,6 @@ function getLanesToRetrySynchronouslyOnError(root, originallyAttemptedLanes) {
   root = root.pendingLanes & -536870913;
   return 0 !== root ? root : root & 536870912 ? 536870912 : 0;
 }
-function includesBlockingLane(root, lanes) {
-  return 0 !== (root.current.mode & 32) ? !1 : 0 !== (lanes & 60);
-}
 function claimNextTransitionLane() {
   var lane = nextTransitionLane;
   nextTransitionLane <<= 1;
@@ -2741,6 +2738,29 @@ function updateWorkInProgressHook() {
   }
   return workInProgressHook;
 }
+function unstable_useContextWithBailout(context, select) {
+  if (null === select) return readContext(context);
+  if (!enableLazyContextPropagation) throw Error(formatProdErrorMessage(248));
+  var consumer = currentlyRenderingFiber,
+    value = context._currentValue2;
+  if (lastFullyObservedContext !== context)
+    if (
+      ((context = {
+        context: context,
+        memoizedValue: value,
+        next: null,
+        select: select,
+        lastSelectedValue: select(value)
+      }),
+      null === lastContextDependency)
+    ) {
+      if (null === consumer) throw Error(formatProdErrorMessage(308));
+      lastContextDependency = context;
+      consumer.dependencies = { lanes: 0, firstContext: context };
+      enableLazyContextPropagation && (consumer.flags |= 524288);
+    } else lastContextDependency = lastContextDependency.next = context;
+  return value;
+}
 var createFunctionComponentUpdateQueue;
 createFunctionComponentUpdateQueue = function () {
   return { lastEffect: null, events: null, stores: null, memoCache: null };
@@ -2964,9 +2984,8 @@ function updateSyncExternalStore(subscribe, getSnapshot) {
       { destroy: void 0 },
       null
     );
-    subscribe = workInProgressRoot;
-    if (null === subscribe) throw Error(formatProdErrorMessage(349));
-    includesBlockingLane(subscribe, renderLanes) ||
+    if (null === workInProgressRoot) throw Error(formatProdErrorMessage(349));
+    0 !== (renderLanes & 60) ||
       pushStoreConsistencyCheck(fiber, getSnapshot, nextSnapshot);
   }
   return nextSnapshot;
@@ -3585,6 +3604,7 @@ ContextOnlyDispatcher.useHostTransitionStatus = throwInvalidHookError;
 ContextOnlyDispatcher.useFormState = throwInvalidHookError;
 ContextOnlyDispatcher.useActionState = throwInvalidHookError;
 ContextOnlyDispatcher.useOptimistic = throwInvalidHookError;
+ContextOnlyDispatcher.unstable_useContextWithBailout = throwInvalidHookError;
 var HooksDispatcherOnMount = {
   readContext: readContext,
   use: use,
@@ -3681,20 +3701,19 @@ var HooksDispatcherOnMount = {
     var fiber = currentlyRenderingFiber$1,
       hook = mountWorkInProgressHook();
     var nextSnapshot = getSnapshot();
-    var root = workInProgressRoot;
-    if (null === root) throw Error(formatProdErrorMessage(349));
-    includesBlockingLane(root, workInProgressRootRenderLanes) ||
+    if (null === workInProgressRoot) throw Error(formatProdErrorMessage(349));
+    0 !== (workInProgressRootRenderLanes & 60) ||
       pushStoreConsistencyCheck(fiber, getSnapshot, nextSnapshot);
     hook.memoizedState = nextSnapshot;
-    root = { value: nextSnapshot, getSnapshot: getSnapshot };
-    hook.queue = root;
-    mountEffect(subscribeToStore.bind(null, fiber, root, subscribe), [
+    var inst = { value: nextSnapshot, getSnapshot: getSnapshot };
+    hook.queue = inst;
+    mountEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [
       subscribe
     ]);
     fiber.flags |= 2048;
     pushEffect(
       9,
-      updateStoreInstance.bind(null, fiber, root, nextSnapshot, getSnapshot),
+      updateStoreInstance.bind(null, fiber, inst, nextSnapshot, getSnapshot),
       { destroy: void 0 },
       null
     );
@@ -3748,6 +3767,8 @@ HooksDispatcherOnMount.useOptimistic = function (passthrough) {
   queue.dispatch = hook;
   return [passthrough, hook];
 };
+HooksDispatcherOnMount.unstable_useContextWithBailout =
+  unstable_useContextWithBailout;
 var HooksDispatcherOnUpdate = {
   readContext: readContext,
   use: use,
@@ -3796,6 +3817,8 @@ HooksDispatcherOnUpdate.useOptimistic = function (passthrough, reducer) {
   var hook = updateWorkInProgressHook();
   return updateOptimisticImpl(hook, currentHook, passthrough, reducer);
 };
+HooksDispatcherOnUpdate.unstable_useContextWithBailout =
+  unstable_useContextWithBailout;
 var HooksDispatcherOnRerender = {
   readContext: readContext,
   use: use,
@@ -3849,6 +3872,8 @@ HooksDispatcherOnRerender.useOptimistic = function (passthrough, reducer) {
   hook.baseState = passthrough;
   return [passthrough, hook.queue.dispatch];
 };
+HooksDispatcherOnRerender.unstable_useContextWithBailout =
+  unstable_useContextWithBailout;
 function applyDerivedStateFromProps(
   workInProgress,
   ctor,
@@ -6261,8 +6286,19 @@ function propagateContextChanges(
         a: for (; null !== list; ) {
           var dependency = list;
           list = fiber;
-          for (var i = 0; i < contexts.length; i++)
+          var i = 0;
+          b: for (; i < contexts.length; i++)
             if (dependency.context === contexts[i]) {
+              var select = dependency.select;
+              if (
+                null != select &&
+                null != dependency.lastSelectedValue &&
+                !checkIfSelectedContextValuesChanged(
+                  dependency.lastSelectedValue,
+                  select(dependency.context._currentValue2)
+                )
+              )
+                continue b;
               list.lanes |= renderLanes;
               dependency = list.alternate;
               null !== dependency && (dependency.lanes |= renderLanes);
@@ -6352,6 +6388,17 @@ function propagateParentContextChanges(
     workInProgress.flags |= 262144;
   }
 }
+function checkIfSelectedContextValuesChanged(
+  oldComparedValue,
+  newComparedValue
+) {
+  if (isArrayImpl(oldComparedValue) && isArrayImpl(newComparedValue)) {
+    if (oldComparedValue.length !== newComparedValue.length) return !0;
+    for (var i = 0; i < oldComparedValue.length; i++)
+      if (!objectIs(newComparedValue[i], oldComparedValue[i])) return !0;
+  } else throw Error(formatProdErrorMessage(541));
+  return !1;
+}
 function checkIfContextChanged(currentDependencies) {
   if (!enableLazyContextPropagation) return !1;
   for (
@@ -6359,13 +6406,20 @@ function checkIfContextChanged(currentDependencies) {
     null !== currentDependencies;
 
   ) {
+    var newValue = currentDependencies.context._currentValue2,
+      oldValue = currentDependencies.memoizedValue;
     if (
-      !objectIs(
-        currentDependencies.context._currentValue2,
-        currentDependencies.memoizedValue
+      null != currentDependencies.select &&
+      null != currentDependencies.lastSelectedValue
+    ) {
+      if (
+        checkIfSelectedContextValuesChanged(
+          currentDependencies.lastSelectedValue,
+          currentDependencies.select(newValue)
+        )
       )
-    )
-      return !0;
+        return !0;
+    } else if (!objectIs(newValue, oldValue)) return !0;
     currentDependencies = currentDependencies.next;
   }
   return !1;
@@ -9195,7 +9249,7 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
   );
   if (0 === lanes) return null;
   var exitStatus = (didTimeout =
-    !includesBlockingLane(root, lanes) &&
+    0 === (lanes & 60) &&
     0 === (lanes & root.expiredLanes) &&
     (disableSchedulerTimeoutInWorkLoop || !didTimeout))
     ? renderRootConcurrent(root, lanes)
@@ -9514,7 +9568,7 @@ function prepareFreshStack(root, lanes) {
   workInProgressRootRecoverableErrors = workInProgressRootConcurrentErrors =
     null;
   workInProgressRootDidIncludeRecursiveRenderUpdate = !1;
-  0 === (root.current.mode & 32) && 0 !== (lanes & 8) && (lanes |= lanes & 32);
+  0 !== (lanes & 8) && (lanes |= lanes & 32);
   var allEntangledLanes = root.entangledLanes;
   if (0 !== allEntangledLanes)
     for (
@@ -10761,19 +10815,19 @@ var slice = Array.prototype.slice,
     };
     return Text;
   })(React.Component),
-  devToolsConfig$jscomp$inline_1176 = {
+  devToolsConfig$jscomp$inline_1180 = {
     findFiberByHostInstance: function () {
       return null;
     },
     bundleType: 0,
-    version: "19.0.0-www-classic-da4abf00-20240723",
+    version: "19.0.0-www-classic-d17e9d1c-20240726",
     rendererPackageName: "react-art"
   };
-var internals$jscomp$inline_1376 = {
-  bundleType: devToolsConfig$jscomp$inline_1176.bundleType,
-  version: devToolsConfig$jscomp$inline_1176.version,
-  rendererPackageName: devToolsConfig$jscomp$inline_1176.rendererPackageName,
-  rendererConfig: devToolsConfig$jscomp$inline_1176.rendererConfig,
+var internals$jscomp$inline_1385 = {
+  bundleType: devToolsConfig$jscomp$inline_1180.bundleType,
+  version: devToolsConfig$jscomp$inline_1180.version,
+  rendererPackageName: devToolsConfig$jscomp$inline_1180.rendererPackageName,
+  rendererConfig: devToolsConfig$jscomp$inline_1180.rendererConfig,
   overrideHookState: null,
   overrideHookStateDeletePath: null,
   overrideHookStateRenamePath: null,
@@ -10790,26 +10844,26 @@ var internals$jscomp$inline_1376 = {
     return null === fiber ? null : fiber.stateNode;
   },
   findFiberByHostInstance:
-    devToolsConfig$jscomp$inline_1176.findFiberByHostInstance ||
+    devToolsConfig$jscomp$inline_1180.findFiberByHostInstance ||
     emptyFindFiberByHostInstance,
   findHostInstancesForRefresh: null,
   scheduleRefresh: null,
   scheduleRoot: null,
   setRefreshHandler: null,
   getCurrentFiber: null,
-  reconcilerVersion: "19.0.0-www-classic-da4abf00-20240723"
+  reconcilerVersion: "19.0.0-www-classic-d17e9d1c-20240726"
 };
 if ("undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__) {
-  var hook$jscomp$inline_1377 = __REACT_DEVTOOLS_GLOBAL_HOOK__;
+  var hook$jscomp$inline_1386 = __REACT_DEVTOOLS_GLOBAL_HOOK__;
   if (
-    !hook$jscomp$inline_1377.isDisabled &&
-    hook$jscomp$inline_1377.supportsFiber
+    !hook$jscomp$inline_1386.isDisabled &&
+    hook$jscomp$inline_1386.supportsFiber
   )
     try {
-      (rendererID = hook$jscomp$inline_1377.inject(
-        internals$jscomp$inline_1376
+      (rendererID = hook$jscomp$inline_1386.inject(
+        internals$jscomp$inline_1385
       )),
-        (injectedHook = hook$jscomp$inline_1377);
+        (injectedHook = hook$jscomp$inline_1386);
     } catch (err) {}
 }
 var Path = Mode$1.Path;

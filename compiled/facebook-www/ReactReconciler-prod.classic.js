@@ -705,9 +705,6 @@ module.exports = function ($$$config) {
     root = root.pendingLanes & -536870913;
     return 0 !== root ? root : root & 536870912 ? 536870912 : 0;
   }
-  function includesBlockingLane(root, lanes) {
-    return 0 !== (root.current.mode & 32) ? !1 : 0 !== (lanes & 60);
-  }
   function claimNextTransitionLane() {
     var lane = nextTransitionLane;
     nextTransitionLane <<= 1;
@@ -2590,6 +2587,31 @@ module.exports = function ($$$config) {
     }
     return workInProgressHook;
   }
+  function unstable_useContextWithBailout(context, select) {
+    if (null === select) return readContext(context);
+    if (!enableLazyContextPropagation) throw Error(formatProdErrorMessage(248));
+    var consumer = currentlyRenderingFiber,
+      value = isPrimaryRenderer
+        ? context._currentValue
+        : context._currentValue2;
+    if (lastFullyObservedContext !== context)
+      if (
+        ((context = {
+          context: context,
+          memoizedValue: value,
+          next: null,
+          select: select,
+          lastSelectedValue: select(value)
+        }),
+        null === lastContextDependency)
+      ) {
+        if (null === consumer) throw Error(formatProdErrorMessage(308));
+        lastContextDependency = context;
+        consumer.dependencies = { lanes: 0, firstContext: context };
+        enableLazyContextPropagation && (consumer.flags |= 524288);
+      } else lastContextDependency = lastContextDependency.next = context;
+    return value;
+  }
   function useThenable(thenable) {
     var index = thenableIndexCounter;
     thenableIndexCounter += 1;
@@ -2820,10 +2842,9 @@ module.exports = function ($$$config) {
         { destroy: void 0 },
         null
       );
-      subscribe = workInProgressRoot;
-      if (null === subscribe) throw Error(formatProdErrorMessage(349));
+      if (null === workInProgressRoot) throw Error(formatProdErrorMessage(349));
       isHydrating$jscomp$0 ||
-        includesBlockingLane(subscribe, renderLanes) ||
+        0 !== (renderLanes & 60) ||
         pushStoreConsistencyCheck(fiber, getSnapshot, getServerSnapshot);
     }
     return getServerSnapshot;
@@ -6196,8 +6217,23 @@ module.exports = function ($$$config) {
           a: for (; null !== list; ) {
             var dependency = list;
             list = fiber;
-            for (var i = 0; i < contexts.length; i++)
+            var i = 0;
+            b: for (; i < contexts.length; i++)
               if (dependency.context === contexts[i]) {
+                var select = dependency.select;
+                if (
+                  null != select &&
+                  null != dependency.lastSelectedValue &&
+                  !checkIfSelectedContextValuesChanged(
+                    dependency.lastSelectedValue,
+                    select(
+                      isPrimaryRenderer
+                        ? dependency.context._currentValue
+                        : dependency.context._currentValue2
+                    )
+                  )
+                )
+                  continue b;
                 list.lanes |= renderLanes;
                 dependency = list.alternate;
                 null !== dependency && (dependency.lanes |= renderLanes);
@@ -6293,6 +6329,17 @@ module.exports = function ($$$config) {
       workInProgress.flags |= 262144;
     }
   }
+  function checkIfSelectedContextValuesChanged(
+    oldComparedValue,
+    newComparedValue
+  ) {
+    if (isArrayImpl(oldComparedValue) && isArrayImpl(newComparedValue)) {
+      if (oldComparedValue.length !== newComparedValue.length) return !0;
+      for (var i = 0; i < oldComparedValue.length; i++)
+        if (!objectIs(newComparedValue[i], oldComparedValue[i])) return !0;
+    } else throw Error(formatProdErrorMessage(541));
+    return !1;
+  }
   function checkIfContextChanged(currentDependencies) {
     if (!enableLazyContextPropagation) return !1;
     for (
@@ -6301,13 +6348,22 @@ module.exports = function ($$$config) {
 
     ) {
       var context = currentDependencies.context;
+      context = isPrimaryRenderer
+        ? context._currentValue
+        : context._currentValue2;
+      var oldValue = currentDependencies.memoizedValue;
       if (
-        !objectIs(
-          isPrimaryRenderer ? context._currentValue : context._currentValue2,
-          currentDependencies.memoizedValue
+        null != currentDependencies.select &&
+        null != currentDependencies.lastSelectedValue
+      ) {
+        if (
+          checkIfSelectedContextValuesChanged(
+            currentDependencies.lastSelectedValue,
+            currentDependencies.select(context)
+          )
         )
-      )
-        return !0;
+          return !0;
+      } else if (!objectIs(context, oldValue)) return !0;
       currentDependencies = currentDependencies.next;
     }
     return !1;
@@ -9943,7 +9999,7 @@ module.exports = function ($$$config) {
     );
     if (0 === lanes) return null;
     var exitStatus = (didTimeout =
-      !includesBlockingLane(root, lanes) &&
+      0 === (lanes & 60) &&
       0 === (lanes & root.expiredLanes) &&
       (disableSchedulerTimeoutInWorkLoop || !didTimeout))
       ? renderRootConcurrent(root, lanes)
@@ -10284,9 +10340,7 @@ module.exports = function ($$$config) {
     workInProgressRootRecoverableErrors = workInProgressRootConcurrentErrors =
       null;
     workInProgressRootDidIncludeRecursiveRenderUpdate = !1;
-    0 === (root.current.mode & 32) &&
-      0 !== (lanes & 8) &&
-      (lanes |= lanes & 32);
+    0 !== (lanes & 8) && (lanes |= lanes & 32);
     var allEntangledLanes = root.entangledLanes;
     if (0 !== allEntangledLanes)
       for (
@@ -11430,7 +11484,6 @@ module.exports = function ($$$config) {
     initialChildren,
     hydrationCallbacks,
     isStrictMode,
-    concurrentUpdatesByDefaultOverride,
     identifierPrefix,
     onUncaughtError,
     onCaughtError,
@@ -11452,21 +11505,19 @@ module.exports = function ($$$config) {
     enableTransitionTracing &&
       (containerInfo.transitionCallbacks = transitionCallbacks);
     disableLegacyMode || 1 === tag
-      ? ((tag = 1),
-        !0 === isStrictMode && (tag |= 24),
-        concurrentUpdatesByDefaultOverride && (tag |= 32))
+      ? ((tag = 1), !0 === isStrictMode && (tag |= 24))
       : (tag = 0);
     isStrictMode = createFiber(3, null, null, tag);
     containerInfo.current = isStrictMode;
     isStrictMode.stateNode = containerInfo;
-    concurrentUpdatesByDefaultOverride = createCache();
-    concurrentUpdatesByDefaultOverride.refCount++;
-    containerInfo.pooledCache = concurrentUpdatesByDefaultOverride;
-    concurrentUpdatesByDefaultOverride.refCount++;
+    tag = createCache();
+    tag.refCount++;
+    containerInfo.pooledCache = tag;
+    tag.refCount++;
     isStrictMode.memoizedState = {
       element: initialChildren,
       isDehydrated: hydrate,
-      cache: concurrentUpdatesByDefaultOverride
+      cache: tag
     };
     initializeUpdateQueue(isStrictMode);
     return containerInfo;
@@ -11664,7 +11715,7 @@ module.exports = function ($$$config) {
     waitForCommitToBeReady = $$$config.waitForCommitToBeReady,
     NotPendingTransition = $$$config.NotPendingTransition,
     resetFormInstance = $$$config.resetFormInstance;
-  $$$config.printToConsole;
+  $$$config.bindToConsole;
   var supportsMicrotasks = $$$config.supportsMicrotasks,
     scheduleMicrotask = $$$config.scheduleMicrotask,
     supportsTestSelectors = $$$config.supportsTestSelectors,
@@ -11872,6 +11923,7 @@ module.exports = function ($$$config) {
   ContextOnlyDispatcher.useFormState = throwInvalidHookError;
   ContextOnlyDispatcher.useActionState = throwInvalidHookError;
   ContextOnlyDispatcher.useOptimistic = throwInvalidHookError;
+  ContextOnlyDispatcher.unstable_useContextWithBailout = throwInvalidHookError;
   var HooksDispatcherOnMount = {
     readContext: readContext,
     use: use,
@@ -11977,15 +12029,15 @@ module.exports = function ($$$config) {
         getServerSnapshot = getServerSnapshot();
       } else {
         getServerSnapshot = getSnapshot();
-        var root = workInProgressRoot;
-        if (null === root) throw Error(formatProdErrorMessage(349));
-        includesBlockingLane(root, workInProgressRootRenderLanes) ||
+        if (null === workInProgressRoot)
+          throw Error(formatProdErrorMessage(349));
+        0 !== (workInProgressRootRenderLanes & 60) ||
           pushStoreConsistencyCheck(fiber, getSnapshot, getServerSnapshot);
       }
       hook.memoizedState = getServerSnapshot;
-      root = { value: getServerSnapshot, getSnapshot: getSnapshot };
-      hook.queue = root;
-      mountEffect(subscribeToStore.bind(null, fiber, root, subscribe), [
+      var inst = { value: getServerSnapshot, getSnapshot: getSnapshot };
+      hook.queue = inst;
+      mountEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [
         subscribe
       ]);
       fiber.flags |= 2048;
@@ -11994,7 +12046,7 @@ module.exports = function ($$$config) {
         updateStoreInstance.bind(
           null,
           fiber,
-          root,
+          inst,
           getServerSnapshot,
           getSnapshot
         ),
@@ -12070,6 +12122,8 @@ module.exports = function ($$$config) {
     queue.dispatch = hook;
     return [passthrough, hook];
   };
+  HooksDispatcherOnMount.unstable_useContextWithBailout =
+    unstable_useContextWithBailout;
   var HooksDispatcherOnUpdate = {
     readContext: readContext,
     use: use,
@@ -12118,6 +12172,8 @@ module.exports = function ($$$config) {
     var hook = updateWorkInProgressHook();
     return updateOptimisticImpl(hook, currentHook, passthrough, reducer);
   };
+  HooksDispatcherOnUpdate.unstable_useContextWithBailout =
+    unstable_useContextWithBailout;
   var HooksDispatcherOnRerender = {
     readContext: readContext,
     use: use,
@@ -12171,6 +12227,8 @@ module.exports = function ($$$config) {
     hook.baseState = passthrough;
     return [passthrough, hook.queue.dispatch];
   };
+  HooksDispatcherOnRerender.unstable_useContextWithBailout =
+    unstable_useContextWithBailout;
   var classComponentUpdater = {
       isMounted: function (component) {
         return (component = component._reactInternals)
@@ -12445,7 +12503,6 @@ module.exports = function ($$$config) {
       null,
       hydrationCallbacks,
       isStrictMode,
-      concurrentUpdatesByDefaultOverride,
       identifierPrefix,
       onUncaughtError,
       onCaughtError,
@@ -12479,7 +12536,6 @@ module.exports = function ($$$config) {
       initialChildren,
       hydrationCallbacks,
       isStrictMode,
-      concurrentUpdatesByDefaultOverride,
       identifierPrefix,
       onUncaughtError,
       onCaughtError,
@@ -12747,7 +12803,7 @@ module.exports = function ($$$config) {
       scheduleRoot: null,
       setRefreshHandler: null,
       getCurrentFiber: null,
-      reconcilerVersion: "19.0.0-www-classic-da4abf00-20240723"
+      reconcilerVersion: "19.0.0-www-classic-d17e9d1c-20240726"
     };
     if ("undefined" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__)
       devToolsConfig = !1;

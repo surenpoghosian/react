@@ -820,9 +820,6 @@ function getLanesToRetrySynchronouslyOnError(root, originallyAttemptedLanes) {
   root = root.pendingLanes & -536870913;
   return 0 !== root ? root : root & 536870912 ? 536870912 : 0;
 }
-function includesBlockingLane(root, lanes) {
-  return 0 !== (root.current.mode & 32) ? !1 : 0 !== (lanes & 60);
-}
 function claimNextTransitionLane() {
   var lane = nextTransitionLane;
   nextTransitionLane <<= 1;
@@ -3589,6 +3586,29 @@ function updateWorkInProgressHook() {
   }
   return workInProgressHook;
 }
+function unstable_useContextWithBailout(context, select) {
+  if (null === select) return readContext(context);
+  if (!enableLazyContextPropagation) throw Error(formatProdErrorMessage(248));
+  var consumer = currentlyRenderingFiber,
+    value = context._currentValue;
+  if (lastFullyObservedContext !== context)
+    if (
+      ((context = {
+        context: context,
+        memoizedValue: value,
+        next: null,
+        select: select,
+        lastSelectedValue: select(value)
+      }),
+      null === lastContextDependency)
+    ) {
+      if (null === consumer) throw Error(formatProdErrorMessage(308));
+      lastContextDependency = context;
+      consumer.dependencies = { lanes: 0, firstContext: context };
+      enableLazyContextPropagation && (consumer.flags |= 524288);
+    } else lastContextDependency = lastContextDependency.next = context;
+  return value;
+}
 var createFunctionComponentUpdateQueue;
 createFunctionComponentUpdateQueue = function () {
   return { lastEffect: null, events: null, stores: null, memoCache: null };
@@ -3822,10 +3842,9 @@ function updateSyncExternalStore(subscribe, getSnapshot, getServerSnapshot) {
       { destroy: void 0 },
       null
     );
-    subscribe = workInProgressRoot;
-    if (null === subscribe) throw Error(formatProdErrorMessage(349));
+    if (null === workInProgressRoot) throw Error(formatProdErrorMessage(349));
     isHydrating$jscomp$0 ||
-      includesBlockingLane(subscribe, renderLanes) ||
+      0 !== (renderLanes & 60) ||
       pushStoreConsistencyCheck(fiber, getSnapshot, getServerSnapshot);
   }
   return getServerSnapshot;
@@ -4550,6 +4569,7 @@ ContextOnlyDispatcher.useHostTransitionStatus = throwInvalidHookError;
 ContextOnlyDispatcher.useFormState = throwInvalidHookError;
 ContextOnlyDispatcher.useActionState = throwInvalidHookError;
 ContextOnlyDispatcher.useOptimistic = throwInvalidHookError;
+ContextOnlyDispatcher.unstable_useContextWithBailout = throwInvalidHookError;
 var HooksDispatcherOnMount = {
   readContext: readContext,
   use: use,
@@ -4651,15 +4671,14 @@ var HooksDispatcherOnMount = {
       getServerSnapshot = getServerSnapshot();
     } else {
       getServerSnapshot = getSnapshot();
-      var root$74 = workInProgressRoot;
-      if (null === root$74) throw Error(formatProdErrorMessage(349));
-      includesBlockingLane(root$74, workInProgressRootRenderLanes) ||
+      if (null === workInProgressRoot) throw Error(formatProdErrorMessage(349));
+      0 !== (workInProgressRootRenderLanes & 60) ||
         pushStoreConsistencyCheck(fiber, getSnapshot, getServerSnapshot);
     }
     hook.memoizedState = getServerSnapshot;
-    root$74 = { value: getServerSnapshot, getSnapshot: getSnapshot };
-    hook.queue = root$74;
-    mountEffect(subscribeToStore.bind(null, fiber, root$74, subscribe), [
+    var inst = { value: getServerSnapshot, getSnapshot: getSnapshot };
+    hook.queue = inst;
+    mountEffect(subscribeToStore.bind(null, fiber, inst, subscribe), [
       subscribe
     ]);
     fiber.flags |= 2048;
@@ -4668,7 +4687,7 @@ var HooksDispatcherOnMount = {
       updateStoreInstance.bind(
         null,
         fiber,
-        root$74,
+        inst,
         getServerSnapshot,
         getSnapshot
       ),
@@ -4743,6 +4762,8 @@ HooksDispatcherOnMount.useOptimistic = function (passthrough) {
   queue.dispatch = hook;
   return [passthrough, hook];
 };
+HooksDispatcherOnMount.unstable_useContextWithBailout =
+  unstable_useContextWithBailout;
 var HooksDispatcherOnUpdate = {
   readContext: readContext,
   use: use,
@@ -4791,6 +4812,8 @@ HooksDispatcherOnUpdate.useOptimistic = function (passthrough, reducer) {
   var hook = updateWorkInProgressHook();
   return updateOptimisticImpl(hook, currentHook, passthrough, reducer);
 };
+HooksDispatcherOnUpdate.unstable_useContextWithBailout =
+  unstable_useContextWithBailout;
 var HooksDispatcherOnRerender = {
   readContext: readContext,
   use: use,
@@ -4844,6 +4867,8 @@ HooksDispatcherOnRerender.useOptimistic = function (passthrough, reducer) {
   hook.baseState = passthrough;
   return [passthrough, hook.queue.dispatch];
 };
+HooksDispatcherOnRerender.unstable_useContextWithBailout =
+  unstable_useContextWithBailout;
 var now = Scheduler.unstable_now,
   commitTime = 0,
   layoutEffectStartTime = -1,
@@ -7682,8 +7707,19 @@ function propagateContextChanges(
         a: for (; null !== list; ) {
           var dependency = list;
           list = fiber;
-          for (var i = 0; i < contexts.length; i++)
+          var i = 0;
+          b: for (; i < contexts.length; i++)
             if (dependency.context === contexts[i]) {
+              var select = dependency.select;
+              if (
+                null != select &&
+                null != dependency.lastSelectedValue &&
+                !checkIfSelectedContextValuesChanged(
+                  dependency.lastSelectedValue,
+                  select(dependency.context._currentValue)
+                )
+              )
+                continue b;
               list.lanes |= renderLanes;
               dependency = list.alternate;
               null !== dependency && (dependency.lanes |= renderLanes);
@@ -7773,6 +7809,17 @@ function propagateParentContextChanges(
     workInProgress.flags |= 262144;
   }
 }
+function checkIfSelectedContextValuesChanged(
+  oldComparedValue,
+  newComparedValue
+) {
+  if (isArrayImpl(oldComparedValue) && isArrayImpl(newComparedValue)) {
+    if (oldComparedValue.length !== newComparedValue.length) return !0;
+    for (var i = 0; i < oldComparedValue.length; i++)
+      if (!objectIs(newComparedValue[i], oldComparedValue[i])) return !0;
+  } else throw Error(formatProdErrorMessage(541));
+  return !1;
+}
 function checkIfContextChanged(currentDependencies) {
   if (!enableLazyContextPropagation) return !1;
   for (
@@ -7780,13 +7827,20 @@ function checkIfContextChanged(currentDependencies) {
     null !== currentDependencies;
 
   ) {
+    var newValue = currentDependencies.context._currentValue,
+      oldValue = currentDependencies.memoizedValue;
     if (
-      !objectIs(
-        currentDependencies.context._currentValue,
-        currentDependencies.memoizedValue
+      null != currentDependencies.select &&
+      null != currentDependencies.lastSelectedValue
+    ) {
+      if (
+        checkIfSelectedContextValuesChanged(
+          currentDependencies.lastSelectedValue,
+          currentDependencies.select(newValue)
+        )
       )
-    )
-      return !0;
+        return !0;
+    } else if (!objectIs(newValue, oldValue)) return !0;
     currentDependencies = currentDependencies.next;
   }
   return !1;
@@ -9227,7 +9281,9 @@ function commitHostComponentMount(finishedWork) {
         props.autoFocus && instance.focus();
         break a;
       case "img":
-        props.src && (instance.src = props.src);
+        props.src
+          ? (instance.src = props.src)
+          : props.srcSet && (instance.srcset = props.srcSet);
     }
   } catch (error) {
     captureCommitPhaseError(finishedWork, finishedWork.return, error);
@@ -11582,7 +11638,7 @@ function performConcurrentWorkOnRoot(root, didTimeout) {
   );
   if (0 === lanes) return null;
   var exitStatus = (didTimeout =
-    !includesBlockingLane(root, lanes) &&
+    0 === (lanes & 60) &&
     0 === (lanes & root.expiredLanes) &&
     (disableSchedulerTimeoutInWorkLoop || !didTimeout))
     ? renderRootConcurrent(root, lanes)
@@ -11935,7 +11991,7 @@ function prepareFreshStack(root, lanes) {
   workInProgressRootRecoverableErrors = workInProgressRootConcurrentErrors =
     null;
   workInProgressRootDidIncludeRecursiveRenderUpdate = !1;
-  0 === (root.current.mode & 32) && 0 !== (lanes & 8) && (lanes |= lanes & 32);
+  0 !== (lanes & 8) && (lanes |= lanes & 32);
   var allEntangledLanes = root.entangledLanes;
   if (0 !== allEntangledLanes)
     for (
@@ -13215,7 +13271,6 @@ function createFiberRoot(
   initialChildren,
   hydrationCallbacks,
   isStrictMode,
-  concurrentUpdatesByDefaultOverride,
   identifierPrefix,
   onUncaughtError,
   onCaughtError,
@@ -13237,22 +13292,20 @@ function createFiberRoot(
   enableTransitionTracing &&
     (containerInfo.transitionCallbacks = transitionCallbacks);
   disableLegacyMode || 1 === tag
-    ? ((tag = 1),
-      !0 === isStrictMode && (tag |= 24),
-      concurrentUpdatesByDefaultOverride && (tag |= 32))
+    ? ((tag = 1), !0 === isStrictMode && (tag |= 24))
     : (tag = 0);
   isDevToolsPresent && (tag |= 2);
   isStrictMode = createFiber(3, null, null, tag);
   containerInfo.current = isStrictMode;
   isStrictMode.stateNode = containerInfo;
-  concurrentUpdatesByDefaultOverride = createCache();
-  concurrentUpdatesByDefaultOverride.refCount++;
-  containerInfo.pooledCache = concurrentUpdatesByDefaultOverride;
-  concurrentUpdatesByDefaultOverride.refCount++;
+  tag = createCache();
+  tag.refCount++;
+  containerInfo.pooledCache = tag;
+  tag.refCount++;
   isStrictMode.memoizedState = {
     element: initialChildren,
     isDehydrated: hydrate,
-    cache: concurrentUpdatesByDefaultOverride
+    cache: tag
   };
   initializeUpdateQueue(isStrictMode);
   return containerInfo;
@@ -13339,7 +13392,6 @@ function createHydrationContainer(
     initialChildren,
     hydrationCallbacks,
     isStrictMode,
-    concurrentUpdatesByDefaultOverride,
     identifierPrefix,
     onUncaughtError,
     onCaughtError,
@@ -13978,19 +14030,19 @@ function getTargetInstForChangeEvent(domEventName, targetInst) {
 }
 var isInputEventSupported = !1;
 if (canUseDOM) {
-  var JSCompiler_inline_result$jscomp$410;
+  var JSCompiler_inline_result$jscomp$411;
   if (canUseDOM) {
-    var isSupported$jscomp$inline_1647 = "oninput" in document;
-    if (!isSupported$jscomp$inline_1647) {
-      var element$jscomp$inline_1648 = document.createElement("div");
-      element$jscomp$inline_1648.setAttribute("oninput", "return;");
-      isSupported$jscomp$inline_1647 =
-        "function" === typeof element$jscomp$inline_1648.oninput;
+    var isSupported$jscomp$inline_1650 = "oninput" in document;
+    if (!isSupported$jscomp$inline_1650) {
+      var element$jscomp$inline_1651 = document.createElement("div");
+      element$jscomp$inline_1651.setAttribute("oninput", "return;");
+      isSupported$jscomp$inline_1650 =
+        "function" === typeof element$jscomp$inline_1651.oninput;
     }
-    JSCompiler_inline_result$jscomp$410 = isSupported$jscomp$inline_1647;
-  } else JSCompiler_inline_result$jscomp$410 = !1;
+    JSCompiler_inline_result$jscomp$411 = isSupported$jscomp$inline_1650;
+  } else JSCompiler_inline_result$jscomp$411 = !1;
   isInputEventSupported =
-    JSCompiler_inline_result$jscomp$410 &&
+    JSCompiler_inline_result$jscomp$411 &&
     (!document.documentMode || 9 < document.documentMode);
 }
 function stopWatchingForValueChange() {
@@ -14401,20 +14453,20 @@ function extractEvents$1(
   }
 }
 for (
-  var i$jscomp$inline_1688 = 0;
-  i$jscomp$inline_1688 < simpleEventPluginEvents.length;
-  i$jscomp$inline_1688++
+  var i$jscomp$inline_1691 = 0;
+  i$jscomp$inline_1691 < simpleEventPluginEvents.length;
+  i$jscomp$inline_1691++
 ) {
-  var eventName$jscomp$inline_1689 =
-      simpleEventPluginEvents[i$jscomp$inline_1688],
-    domEventName$jscomp$inline_1690 =
-      eventName$jscomp$inline_1689.toLowerCase(),
-    capitalizedEvent$jscomp$inline_1691 =
-      eventName$jscomp$inline_1689[0].toUpperCase() +
-      eventName$jscomp$inline_1689.slice(1);
+  var eventName$jscomp$inline_1692 =
+      simpleEventPluginEvents[i$jscomp$inline_1691],
+    domEventName$jscomp$inline_1693 =
+      eventName$jscomp$inline_1692.toLowerCase(),
+    capitalizedEvent$jscomp$inline_1694 =
+      eventName$jscomp$inline_1692[0].toUpperCase() +
+      eventName$jscomp$inline_1692.slice(1);
   registerSimpleEvent(
-    domEventName$jscomp$inline_1690,
-    "on" + capitalizedEvent$jscomp$inline_1691
+    domEventName$jscomp$inline_1693,
+    "on" + capitalizedEvent$jscomp$inline_1694
   );
 }
 registerSimpleEvent(ANIMATION_END, "onAnimationEnd");
@@ -18015,16 +18067,16 @@ function getCrossOriginStringAs(as, input) {
   if ("string" === typeof input)
     return "use-credentials" === input ? input : "";
 }
-var isomorphicReactPackageVersion$jscomp$inline_1861 = React.version;
+var isomorphicReactPackageVersion$jscomp$inline_1864 = React.version;
 if (
-  "19.0.0-www-classic-da4abf00-20240723" !==
-  isomorphicReactPackageVersion$jscomp$inline_1861
+  "19.0.0-www-classic-d17e9d1c-20240726" !==
+  isomorphicReactPackageVersion$jscomp$inline_1864
 )
   throw Error(
     formatProdErrorMessage(
       527,
-      isomorphicReactPackageVersion$jscomp$inline_1861,
-      "19.0.0-www-classic-da4abf00-20240723"
+      isomorphicReactPackageVersion$jscomp$inline_1864,
+      "19.0.0-www-classic-d17e9d1c-20240726"
     )
   );
 function flushSyncFromReconciler(fn) {
@@ -18067,10 +18119,10 @@ Internals.Events = [
     return fn(a);
   }
 ];
-var devToolsConfig$jscomp$inline_1868 = {
+var devToolsConfig$jscomp$inline_1871 = {
   findFiberByHostInstance: getClosestInstanceFromNode,
   bundleType: 0,
-  version: "19.0.0-www-classic-da4abf00-20240723",
+  version: "19.0.0-www-classic-d17e9d1c-20240726",
   rendererPackageName: "react-dom"
 };
 (function (internals) {
@@ -18088,10 +18140,10 @@ var devToolsConfig$jscomp$inline_1868 = {
   } catch (err) {}
   return hook.checkDCE ? !0 : !1;
 })({
-  bundleType: devToolsConfig$jscomp$inline_1868.bundleType,
-  version: devToolsConfig$jscomp$inline_1868.version,
-  rendererPackageName: devToolsConfig$jscomp$inline_1868.rendererPackageName,
-  rendererConfig: devToolsConfig$jscomp$inline_1868.rendererConfig,
+  bundleType: devToolsConfig$jscomp$inline_1871.bundleType,
+  version: devToolsConfig$jscomp$inline_1871.version,
+  rendererPackageName: devToolsConfig$jscomp$inline_1871.rendererPackageName,
+  rendererConfig: devToolsConfig$jscomp$inline_1871.rendererConfig,
   overrideHookState: null,
   overrideHookStateDeletePath: null,
   overrideHookStateRenamePath: null,
@@ -18107,14 +18159,14 @@ var devToolsConfig$jscomp$inline_1868 = {
     return null === fiber ? null : fiber.stateNode;
   },
   findFiberByHostInstance:
-    devToolsConfig$jscomp$inline_1868.findFiberByHostInstance ||
+    devToolsConfig$jscomp$inline_1871.findFiberByHostInstance ||
     emptyFindFiberByHostInstance,
   findHostInstancesForRefresh: null,
   scheduleRefresh: null,
   scheduleRoot: null,
   setRefreshHandler: null,
   getCurrentFiber: null,
-  reconcilerVersion: "19.0.0-www-classic-da4abf00-20240723"
+  reconcilerVersion: "19.0.0-www-classic-d17e9d1c-20240726"
 });
 function ReactDOMRoot(internalRoot) {
   this._internalRoot = internalRoot;
@@ -18229,7 +18281,6 @@ function legacyCreateRootFromDOMContainer(
     null,
     null,
     !1,
-    !1,
     "",
     wwwOnUncaughtError,
     wwwOnCaughtError,
@@ -18296,7 +18347,6 @@ exports.createRoot = function (container, options) {
   );
   if (!isValidContainer(container)) throw Error(formatProdErrorMessage(299));
   var isStrictMode = !1,
-    concurrentUpdatesByDefaultOverride = !1,
     identifierPrefix = "",
     onUncaughtError = defaultOnUncaughtError,
     onCaughtError = defaultOnCaughtError,
@@ -18305,8 +18355,6 @@ exports.createRoot = function (container, options) {
   null !== options &&
     void 0 !== options &&
     (!0 === options.unstable_strictMode && (isStrictMode = !0),
-    !0 === options.unstable_concurrentUpdatesByDefault &&
-      (concurrentUpdatesByDefaultOverride = !0),
     void 0 !== options.identifierPrefix &&
       (identifierPrefix = options.identifierPrefix),
     void 0 !== options.onUncaughtError &&
@@ -18323,7 +18371,6 @@ exports.createRoot = function (container, options) {
     null,
     null,
     isStrictMode,
-    concurrentUpdatesByDefaultOverride,
     identifierPrefix,
     onUncaughtError,
     onCaughtError,
@@ -18352,7 +18399,6 @@ exports.hydrateRoot = function (container, initialChildren, options) {
   );
   if (!isValidContainer(container)) throw Error(formatProdErrorMessage(299));
   var isStrictMode = !1,
-    concurrentUpdatesByDefaultOverride = !1,
     identifierPrefix = "",
     onUncaughtError = defaultOnUncaughtError,
     onCaughtError = defaultOnCaughtError,
@@ -18362,8 +18408,6 @@ exports.hydrateRoot = function (container, initialChildren, options) {
   null !== options &&
     void 0 !== options &&
     (!0 === options.unstable_strictMode && (isStrictMode = !0),
-    !0 === options.unstable_concurrentUpdatesByDefault &&
-      (concurrentUpdatesByDefaultOverride = !0),
     void 0 !== options.identifierPrefix &&
       (identifierPrefix = options.identifierPrefix),
     void 0 !== options.onUncaughtError &&
@@ -18381,7 +18425,7 @@ exports.hydrateRoot = function (container, initialChildren, options) {
     1,
     null != options ? options : null,
     isStrictMode,
-    concurrentUpdatesByDefaultOverride,
+    !1,
     identifierPrefix,
     onUncaughtError,
     onCaughtError,
@@ -18565,7 +18609,7 @@ exports.useFormState = function (action, initialState, permalink) {
 exports.useFormStatus = function () {
   return ReactSharedInternals.H.useHostTransitionStatus();
 };
-exports.version = "19.0.0-www-classic-da4abf00-20240723";
+exports.version = "19.0.0-www-classic-d17e9d1c-20240726";
 "undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__ &&
   "function" ===
     typeof __REACT_DEVTOOLS_GLOBAL_HOOK__.registerInternalModuleStop &&
