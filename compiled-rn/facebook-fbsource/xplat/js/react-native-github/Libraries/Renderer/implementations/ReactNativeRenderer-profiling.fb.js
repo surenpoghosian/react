@@ -7,7 +7,7 @@
  * @noflow
  * @nolint
  * @preventMunge
- * @generated SignedSource<<a8bda39ebf166cfcb8f2d56f3f850ef3>>
+ * @generated SignedSource<<347b874d0ced1f739c12de98bb5cd039>>
  */
 
 "use strict";
@@ -11417,11 +11417,11 @@ function traverseOwnerTreeUp(hierarchy, instance) {
     traverseOwnerTreeUp(hierarchy, instance);
 }
 var isomorphicReactPackageVersion = React.version;
-if ("19.0.0-native-fb-d17e9d1c-20240726" !== isomorphicReactPackageVersion)
+if ("19.0.0-native-fb-41ecbada-20240730" !== isomorphicReactPackageVersion)
   throw Error(
     'Incompatible React versions: The "react" and "react-native-renderer" packages must have the exact same version. Instead got:\n  - react:                  ' +
       (isomorphicReactPackageVersion +
-        "\n  - react-native-renderer:  19.0.0-native-fb-d17e9d1c-20240726\nLearn more: https://react.dev/warnings/version-mismatch")
+        "\n  - react-native-renderer:  19.0.0-native-fb-41ecbada-20240730\nLearn more: https://react.dev/warnings/version-mismatch")
   );
 if (
   "function" !==
@@ -11471,7 +11471,7 @@ var roots = new Map(),
   devToolsConfig$jscomp$inline_1294 = {
     findFiberByHostInstance: getInstanceFromTag,
     bundleType: 0,
-    version: "19.0.0-native-fb-d17e9d1c-20240726",
+    version: "19.0.0-native-fb-41ecbada-20240730",
     rendererPackageName: "react-native-renderer",
     rendererConfig: {
       getInspectorDataForInstance: getInspectorDataForInstance,
@@ -11515,10 +11515,6 @@ var roots = new Map(),
   setSuspenseHandler: null,
   scheduleUpdate: null,
   currentDispatcherRef: ReactSharedInternals,
-  findHostInstanceByFiber: function (fiber) {
-    fiber = findCurrentHostFiber(fiber);
-    return null === fiber ? null : fiber.stateNode;
-  },
   findFiberByHostInstance:
     devToolsConfig$jscomp$inline_1294.findFiberByHostInstance ||
     emptyFindFiberByHostInstance,
@@ -11527,7 +11523,7 @@ var roots = new Map(),
   scheduleRoot: null,
   setRefreshHandler: null,
   getCurrentFiber: null,
-  reconcilerVersion: "19.0.0-native-fb-d17e9d1c-20240726"
+  reconcilerVersion: "19.0.0-native-fb-41ecbada-20240730"
 });
 exports.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED = {
   computeComponentStackForErrorReporting: function (reactTag) {
