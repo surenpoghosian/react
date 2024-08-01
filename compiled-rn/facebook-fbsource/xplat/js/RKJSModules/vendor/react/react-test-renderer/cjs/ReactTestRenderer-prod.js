@@ -7,7 +7,7 @@
  * @noflow
  * @nolint
  * @preventMunge
- * @generated SignedSource<<3ec132e94d2bcf1a70e23032cb3fd149>>
+ * @generated SignedSource<<99847e4b31abc22cf9f8829955aa569b>>
  */
 
 "use strict";
@@ -727,6 +727,14 @@ function insertBefore(parentInstance, child, beforeChild) {
 var currentUpdatePriority = 0,
   scheduleTimeout = setTimeout,
   cancelTimeout = clearTimeout,
+  HostTransitionContext = {
+    $$typeof: REACT_CONTEXT_TYPE,
+    Provider: null,
+    Consumer: null,
+    _currentValue: null,
+    _currentValue2: null,
+    _threadCount: 0
+  },
   valueStack = [],
   index = -1;
 function createCursor(defaultValue) {
@@ -841,15 +849,7 @@ function createCapturedValueAtFiber(value, source) {
 var contextStackCursor = createCursor(null),
   contextFiberStackCursor = createCursor(null),
   rootInstanceStackCursor = createCursor(null),
-  hostTransitionProviderCursor = createCursor(null),
-  HostTransitionContext = {
-    $$typeof: REACT_CONTEXT_TYPE,
-    Provider: null,
-    Consumer: null,
-    _currentValue: null,
-    _currentValue2: null,
-    _threadCount: 0
-  };
+  hostTransitionProviderCursor = createCursor(null);
 function pushHostContainer(fiber, nextRootInstance) {
   push(rootInstanceStackCursor, nextRootInstance);
   push(contextFiberStackCursor, fiber);
@@ -3118,8 +3118,7 @@ function startTransition(fiber, queue, pendingState, finishedState, callback) {
   }
 }
 function useHostTransitionStatus() {
-  var status = readContext(HostTransitionContext);
-  return null !== status ? status : null;
+  return readContext(HostTransitionContext);
 }
 function updateId() {
   return updateWorkInProgressHook().memoizedState;
@@ -9014,9 +9013,6 @@ function updateContainer(element, container, parentComponent, callback) {
     entangleTransitions(element, current, lane));
   return lane;
 }
-function emptyFindFiberByHostInstance() {
-  return null;
-}
 var act = React.act,
   defaultTestOptions = {
     createNodeMock: function () {
@@ -9313,50 +9309,28 @@ function wrapFiber(fiber) {
     fiberToWrapper.set(fiber, wrapper));
   return wrapper;
 }
-var devToolsConfig$jscomp$inline_1031 = {
-  findFiberByHostInstance: function () {
-    throw Error("TestRenderer does not support findFiberByHostInstance()");
-  },
+var internals$jscomp$inline_1206 = {
   bundleType: 0,
-  version: "19.0.0-native-fb-41ecbada-20240730",
-  rendererPackageName: "react-test-renderer"
-};
-var internals$jscomp$inline_1207 = {
-  bundleType: devToolsConfig$jscomp$inline_1031.bundleType,
-  version: devToolsConfig$jscomp$inline_1031.version,
-  rendererPackageName: devToolsConfig$jscomp$inline_1031.rendererPackageName,
-  rendererConfig: devToolsConfig$jscomp$inline_1031.rendererConfig,
-  overrideHookState: null,
-  overrideHookStateDeletePath: null,
-  overrideHookStateRenamePath: null,
-  overrideProps: null,
-  overridePropsDeletePath: null,
-  overridePropsRenamePath: null,
-  setErrorHandler: null,
-  setSuspenseHandler: null,
-  scheduleUpdate: null,
+  version: "19.0.0-native-fb-06d0b89e-20240801",
+  rendererPackageName: "react-test-renderer",
   currentDispatcherRef: ReactSharedInternals,
-  findFiberByHostInstance:
-    devToolsConfig$jscomp$inline_1031.findFiberByHostInstance ||
-    emptyFindFiberByHostInstance,
-  findHostInstancesForRefresh: null,
-  scheduleRefresh: null,
-  scheduleRoot: null,
-  setRefreshHandler: null,
-  getCurrentFiber: null,
-  reconcilerVersion: "19.0.0-native-fb-41ecbada-20240730"
+  findFiberByHostInstance: function (mockNode) {
+    mockNode = nodeToInstanceMap.get(mockNode);
+    return void 0 !== mockNode ? mockNode.internalInstanceHandle : null;
+  },
+  reconcilerVersion: "19.0.0-native-fb-06d0b89e-20240801"
 };
 if ("undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__) {
-  var hook$jscomp$inline_1208 = __REACT_DEVTOOLS_GLOBAL_HOOK__;
+  var hook$jscomp$inline_1207 = __REACT_DEVTOOLS_GLOBAL_HOOK__;
   if (
-    !hook$jscomp$inline_1208.isDisabled &&
-    hook$jscomp$inline_1208.supportsFiber
+    !hook$jscomp$inline_1207.isDisabled &&
+    hook$jscomp$inline_1207.supportsFiber
   )
     try {
-      (rendererID = hook$jscomp$inline_1208.inject(
-        internals$jscomp$inline_1207
+      (rendererID = hook$jscomp$inline_1207.inject(
+        internals$jscomp$inline_1206
       )),
-        (injectedHook = hook$jscomp$inline_1208);
+        (injectedHook = hook$jscomp$inline_1207);
     } catch (err) {}
 }
 exports._Scheduler = Scheduler;
@@ -9480,3 +9454,4 @@ exports.unstable_batchedUpdates = function (fn, a) {
         flushSyncWorkAcrossRoots_impl(!0));
   }
 };
+exports.version = "19.0.0-native-fb-06d0b89e-20240801";
