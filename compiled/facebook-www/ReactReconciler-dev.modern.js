@@ -72,20 +72,6 @@ __DEV__ &&
     function shouldErrorImpl() {
       return null;
     }
-    function findHostInstancesForRefresh(root, families) {
-      var hostInstances = new Set();
-      families = new Set(
-        families.map(function (family) {
-          return family.current;
-        })
-      );
-      findHostInstancesForMatchingFibersRecursively(
-        root.current,
-        families,
-        hostInstances
-      );
-      return hostInstances;
-    }
     function scheduleRoot(root, element) {
       root.context === emptyContextObject &&
         (updateContainerSync(element, root, null, null), flushSyncWork());
@@ -1064,13 +1050,7 @@ __DEV__ &&
           !0
         );
       try {
-        enableSchedulingProfiler &&
-          (internals = assign({}, internals, {
-            getLaneLabelMap: getLaneLabelMap,
-            injectProfilingHooks: injectProfilingHooks
-          })),
-          (rendererID = hook.inject(internals)),
-          (injectedHook = hook);
+        (rendererID = hook.inject(internals)), (injectedHook = hook);
       } catch (err) {
         error$jscomp$0("React instrumentation encountered an error: %s.", err);
       }
@@ -1129,17 +1109,6 @@ __DEV__ &&
     }
     function injectProfilingHooks(profilingHooks) {
       injectedProfilingHooks = profilingHooks;
-    }
-    function getLaneLabelMap() {
-      if (enableSchedulingProfiler) {
-        for (var map = new Map(), lane = 1, index = 0; 31 > index; index++) {
-          var label = getLabelForLane(lane);
-          map.set(lane, label);
-          lane *= 2;
-        }
-        return map;
-      }
-      return null;
     }
     function markCommitStopped() {
       enableSchedulingProfiler &&
@@ -1399,8 +1368,8 @@ __DEV__ &&
       hostTransitionProviderCursor.current === fiber &&
         (pop(hostTransitionProviderCursor, fiber),
         isPrimaryRenderer
-          ? (HostTransitionContext._currentValue = null)
-          : (HostTransitionContext._currentValue2 = null));
+          ? (HostTransitionContext._currentValue = NotPendingTransition)
+          : (HostTransitionContext._currentValue2 = NotPendingTransition));
     }
     function findNotableNode(node, indent) {
       return void 0 === node.serverProps &&
@@ -5313,8 +5282,7 @@ __DEV__ &&
       ];
     }
     function useHostTransitionStatus() {
-      var status = readContext(HostTransitionContext);
-      return null !== status ? status : NotPendingTransition;
+      return readContext(HostTransitionContext);
     }
     function mountId() {
       var hook = mountWorkInProgressHook(),
@@ -15039,87 +15007,6 @@ __DEV__ &&
           staleFamilies
         );
     }
-    function findHostInstancesForMatchingFibersRecursively(
-      fiber,
-      types,
-      hostInstances
-    ) {
-      var child = fiber.child,
-        sibling = fiber.sibling,
-        type = fiber.type,
-        candidateType = null;
-      switch (fiber.tag) {
-        case 0:
-        case 15:
-        case 1:
-          candidateType = type;
-          break;
-        case 11:
-          candidateType = type.render;
-      }
-      type = !1;
-      null !== candidateType && types.has(candidateType) && (type = !0);
-      if (type)
-        a: {
-          b: for (child = fiber, candidateType = !1; ; ) {
-            if (
-              5 === child.tag ||
-              26 === child.tag ||
-              (supportsSingletons && 27 === child.tag)
-            )
-              (candidateType = !0), hostInstances.add(child.stateNode);
-            else if (null !== child.child) {
-              child.child.return = child;
-              child = child.child;
-              continue;
-            }
-            if (child === fiber) {
-              child = candidateType;
-              break b;
-            }
-            for (; null === child.sibling; ) {
-              if (null === child.return || child.return === fiber) {
-                child = candidateType;
-                break b;
-              }
-              child = child.return;
-            }
-            child.sibling.return = child.return;
-            child = child.sibling;
-          }
-          if (!child)
-            for (;;) {
-              switch (fiber.tag) {
-                case 27:
-                case 5:
-                  hostInstances.add(fiber.stateNode);
-                  break a;
-                case 4:
-                  hostInstances.add(fiber.stateNode.containerInfo);
-                  break a;
-                case 3:
-                  hostInstances.add(fiber.stateNode.containerInfo);
-                  break a;
-              }
-              if (null === fiber.return)
-                throw Error("Expected to reach root first.");
-              fiber = fiber.return;
-            }
-        }
-      else
-        null !== child &&
-          findHostInstancesForMatchingFibersRecursively(
-            child,
-            types,
-            hostInstances
-          );
-      null !== sibling &&
-        findHostInstancesForMatchingFibersRecursively(
-          sibling,
-          types,
-          hostInstances
-        );
-    }
     function FiberNode(tag, pendingProps, key, mode) {
       this.tag = tag;
       this.key = key;
@@ -15751,11 +15638,19 @@ __DEV__ &&
       markRetryLaneImpl(fiber, retryLane);
       (fiber = fiber.alternate) && markRetryLaneImpl(fiber, retryLane);
     }
-    function emptyFindFiberByHostInstance() {
-      return null;
-    }
     function getCurrentFiberForDevTools() {
       return current;
+    }
+    function getLaneLabelMap() {
+      if (enableSchedulingProfiler) {
+        for (var map = new Map(), lane = 1, index = 0; 31 > index; index++) {
+          var label = getLabelForLane(lane);
+          map.set(lane, label);
+          lane *= 2;
+        }
+        return map;
+      }
+      return null;
     }
     var exports = {};
     ("use strict");
@@ -15836,6 +15731,9 @@ __DEV__ &&
     var current = null,
       isRendering = !1,
       isArrayImpl = Array.isArray,
+      rendererVersion = $$$config.rendererVersion,
+      rendererPackageName = $$$config.rendererPackageName,
+      extraDevToolsConfig = $$$config.extraDevToolsConfig,
       getPublicInstance = $$$config.getPublicInstance,
       getRootHostContext = $$$config.getRootHostContext,
       getChildHostContext = $$$config.getChildHostContext,
@@ -15872,6 +15770,7 @@ __DEV__ &&
       suspendInstance = $$$config.suspendInstance,
       waitForCommitToBeReady = $$$config.waitForCommitToBeReady,
       NotPendingTransition = $$$config.NotPendingTransition,
+      HostTransitionContext = $$$config.HostTransitionContext,
       resetFormInstance = $$$config.resetFormInstance,
       bindToConsole = $$$config.bindToConsole,
       supportsMicrotasks = $$$config.supportsMicrotasks,
@@ -16008,14 +15907,6 @@ __DEV__ &&
       contextFiberStackCursor = createCursor(null),
       rootInstanceStackCursor = createCursor(null),
       hostTransitionProviderCursor = createCursor(null),
-      HostTransitionContext = {
-        $$typeof: REACT_CONTEXT_TYPE,
-        Provider: null,
-        Consumer: null,
-        _currentValue: null,
-        _currentValue2: null,
-        _threadCount: 0
-      },
       needsEscaping = /["'&<>\n\t]|^\s|\s$/,
       hydrationParentFiber = null,
       nextHydratableInstance = null,
@@ -18479,32 +18370,34 @@ __DEV__ &&
           return container.child.stateNode;
       }
     };
-    exports.injectIntoDevTools = function (devToolsConfig) {
-      return injectInternals({
-        bundleType: devToolsConfig.bundleType,
-        version: devToolsConfig.version,
-        rendererPackageName: devToolsConfig.rendererPackageName,
-        rendererConfig: devToolsConfig.rendererConfig,
-        overrideHookState: overrideHookState,
-        overrideHookStateDeletePath: overrideHookStateDeletePath,
-        overrideHookStateRenamePath: overrideHookStateRenamePath,
-        overrideProps: overrideProps,
-        overridePropsDeletePath: overridePropsDeletePath,
-        overridePropsRenamePath: overridePropsRenamePath,
-        setErrorHandler: setErrorHandler,
-        setSuspenseHandler: setSuspenseHandler,
-        scheduleUpdate: scheduleUpdate,
+    exports.injectIntoDevTools = function () {
+      var internals = {
+        bundleType: 1,
+        version: rendererVersion,
+        rendererPackageName: rendererPackageName,
         currentDispatcherRef: ReactSharedInternals,
-        findFiberByHostInstance:
-          devToolsConfig.findFiberByHostInstance ||
-          emptyFindFiberByHostInstance,
-        findHostInstancesForRefresh: findHostInstancesForRefresh,
-        scheduleRefresh: scheduleRefresh,
-        scheduleRoot: scheduleRoot,
-        setRefreshHandler: setRefreshHandler,
-        getCurrentFiber: getCurrentFiberForDevTools,
-        reconcilerVersion: "19.0.0-www-modern-41ecbada-20240730"
-      });
+        findFiberByHostInstance: getInstanceFromNode,
+        reconcilerVersion: "19.0.0-www-modern-06d0b89e-20240801"
+      };
+      null !== extraDevToolsConfig &&
+        (internals.rendererConfig = extraDevToolsConfig);
+      internals.overrideHookState = overrideHookState;
+      internals.overrideHookStateDeletePath = overrideHookStateDeletePath;
+      internals.overrideHookStateRenamePath = overrideHookStateRenamePath;
+      internals.overrideProps = overrideProps;
+      internals.overridePropsDeletePath = overridePropsDeletePath;
+      internals.overridePropsRenamePath = overridePropsRenamePath;
+      internals.scheduleUpdate = scheduleUpdate;
+      internals.setErrorHandler = setErrorHandler;
+      internals.setSuspenseHandler = setSuspenseHandler;
+      internals.scheduleRefresh = scheduleRefresh;
+      internals.scheduleRoot = scheduleRoot;
+      internals.setRefreshHandler = setRefreshHandler;
+      internals.getCurrentFiber = getCurrentFiberForDevTools;
+      enableSchedulingProfiler &&
+        ((internals.getLaneLabelMap = getLaneLabelMap),
+        (internals.injectProfilingHooks = injectProfilingHooks));
+      return injectInternals(internals);
     };
     exports.isAlreadyRendering = function () {
       return (executionContext & (RenderContext | CommitContext)) !== NoContext;

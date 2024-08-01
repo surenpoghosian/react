@@ -852,15 +852,7 @@ function push(cursor, value) {
 var contextStackCursor$1 = createCursor(null),
   contextFiberStackCursor = createCursor(null),
   rootInstanceStackCursor = createCursor(null),
-  hostTransitionProviderCursor = createCursor(null),
-  HostTransitionContext = {
-    $$typeof: REACT_CONTEXT_TYPE,
-    Provider: null,
-    Consumer: null,
-    _currentValue: null,
-    _currentValue2: null,
-    _threadCount: 0
-  };
+  hostTransitionProviderCursor = createCursor(null);
 function pushHostContainer(fiber, nextRootInstance) {
   push(rootInstanceStackCursor, nextRootInstance);
   push(contextFiberStackCursor, fiber);
@@ -916,7 +908,7 @@ function popHostContext(fiber) {
     (pop(contextStackCursor$1), pop(contextFiberStackCursor));
   hostTransitionProviderCursor.current === fiber &&
     (pop(hostTransitionProviderCursor),
-    (HostTransitionContext._currentValue = null));
+    (HostTransitionContext._currentValue = sharedNotPendingObject));
 }
 var hasOwnProperty = Object.prototype.hasOwnProperty;
 function resolveUpdatePriority() {
@@ -4268,8 +4260,7 @@ function requestFormReset$1(formFiber) {
   dispatchSetState(formFiber, resetStateQueue, {});
 }
 function useHostTransitionStatus() {
-  var status = readContext(HostTransitionContext);
-  return null !== status ? status : sharedNotPendingObject;
+  return readContext(HostTransitionContext);
 }
 function updateId() {
   return updateWorkInProgressHook().memoizedState;
@@ -7690,7 +7681,7 @@ function DO_NOT_USE_queryFirstNode(fn) {
     : null;
 }
 function containsNode$1(node) {
-  for (node = getClosestInstanceFromNode(node) || null; null !== node; ) {
+  for (node = getClosestInstanceFromNode(node); null !== node; ) {
     if (21 === node.tag && node.stateNode === this) return !0;
     node = node.return;
   }
@@ -12600,9 +12591,6 @@ function attemptContinuousHydration(fiber) {
     markRetryLaneIfNotHydrated(fiber, 67108864);
   }
 }
-function emptyFindFiberByHostInstance() {
-  return null;
-}
 var isInsideEventHandler = !1;
 function batchedUpdates(fn, a, b) {
   if (isInsideEventHandler) return fn(a, b);
@@ -16436,7 +16424,15 @@ function insertStylesheetIntoRoot(root, resource) {
     resource.state.loading |= 4;
   }
 }
-var randomKey = Math.random().toString(36).slice(2),
+var HostTransitionContext = {
+    $$typeof: REACT_CONTEXT_TYPE,
+    Provider: null,
+    Consumer: null,
+    _currentValue: sharedNotPendingObject,
+    _currentValue2: sharedNotPendingObject,
+    _threadCount: 0
+  },
+  randomKey = Math.random().toString(36).slice(2),
   internalInstanceKey = "__reactFiber$" + randomKey,
   internalPropsKey = "__reactProps$" + randomKey,
   internalContainerInstanceKey = "__reactContainer$" + randomKey,
@@ -17178,14 +17174,14 @@ function getCrossOriginStringAs(as, input) {
 }
 var isomorphicReactPackageVersion$jscomp$inline_1753 = React.version;
 if (
-  "19.0.0-www-classic-41ecbada-20240730" !==
+  "19.0.0-www-classic-06d0b89e-20240801" !==
   isomorphicReactPackageVersion$jscomp$inline_1753
 )
   throw Error(
     formatProdErrorMessage(
       527,
       isomorphicReactPackageVersion$jscomp$inline_1753,
-      "19.0.0-www-classic-41ecbada-20240730"
+      "19.0.0-www-classic-06d0b89e-20240801"
     )
   );
 function flushSyncFromReconciler(fn) {
@@ -17228,48 +17224,25 @@ Internals.Events = [
     return fn(a);
   }
 ];
-var devToolsConfig$jscomp$inline_1760 = {
-  findFiberByHostInstance: getClosestInstanceFromNode,
+var internals$jscomp$inline_2208 = {
   bundleType: 0,
-  version: "19.0.0-www-classic-41ecbada-20240730",
-  rendererPackageName: "react-dom"
-};
-var internals$jscomp$inline_2209 = {
-  bundleType: devToolsConfig$jscomp$inline_1760.bundleType,
-  version: devToolsConfig$jscomp$inline_1760.version,
-  rendererPackageName: devToolsConfig$jscomp$inline_1760.rendererPackageName,
-  rendererConfig: devToolsConfig$jscomp$inline_1760.rendererConfig,
-  overrideHookState: null,
-  overrideHookStateDeletePath: null,
-  overrideHookStateRenamePath: null,
-  overrideProps: null,
-  overridePropsDeletePath: null,
-  overridePropsRenamePath: null,
-  setErrorHandler: null,
-  setSuspenseHandler: null,
-  scheduleUpdate: null,
+  version: "19.0.0-www-classic-06d0b89e-20240801",
+  rendererPackageName: "react-dom",
   currentDispatcherRef: ReactSharedInternals,
-  findFiberByHostInstance:
-    devToolsConfig$jscomp$inline_1760.findFiberByHostInstance ||
-    emptyFindFiberByHostInstance,
-  findHostInstancesForRefresh: null,
-  scheduleRefresh: null,
-  scheduleRoot: null,
-  setRefreshHandler: null,
-  getCurrentFiber: null,
-  reconcilerVersion: "19.0.0-www-classic-41ecbada-20240730"
+  findFiberByHostInstance: getClosestInstanceFromNode,
+  reconcilerVersion: "19.0.0-www-classic-06d0b89e-20240801"
 };
 if ("undefined" !== typeof __REACT_DEVTOOLS_GLOBAL_HOOK__) {
-  var hook$jscomp$inline_2210 = __REACT_DEVTOOLS_GLOBAL_HOOK__;
+  var hook$jscomp$inline_2209 = __REACT_DEVTOOLS_GLOBAL_HOOK__;
   if (
-    !hook$jscomp$inline_2210.isDisabled &&
-    hook$jscomp$inline_2210.supportsFiber
+    !hook$jscomp$inline_2209.isDisabled &&
+    hook$jscomp$inline_2209.supportsFiber
   )
     try {
-      (rendererID = hook$jscomp$inline_2210.inject(
-        internals$jscomp$inline_2209
+      (rendererID = hook$jscomp$inline_2209.inject(
+        internals$jscomp$inline_2208
       )),
-        (injectedHook = hook$jscomp$inline_2210);
+        (injectedHook = hook$jscomp$inline_2209);
     } catch (err) {}
 }
 function ReactDOMRoot(internalRoot) {
@@ -17713,4 +17686,4 @@ exports.useFormState = function (action, initialState, permalink) {
 exports.useFormStatus = function () {
   return ReactSharedInternals.H.useHostTransitionStatus();
 };
-exports.version = "19.0.0-www-classic-41ecbada-20240730";
+exports.version = "19.0.0-www-classic-06d0b89e-20240801";

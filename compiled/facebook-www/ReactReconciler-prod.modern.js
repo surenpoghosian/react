@@ -774,8 +774,8 @@ module.exports = function ($$$config) {
     hostTransitionProviderCursor.current === fiber &&
       (pop(hostTransitionProviderCursor),
       isPrimaryRenderer
-        ? (HostTransitionContext._currentValue = null)
-        : (HostTransitionContext._currentValue2 = null));
+        ? (HostTransitionContext._currentValue = NotPendingTransition)
+        : (HostTransitionContext._currentValue2 = NotPendingTransition));
   }
   function throwOnHydrationMismatch(fiber) {
     var error = Error(formatProdErrorMessage(418, ""));
@@ -3223,8 +3223,7 @@ module.exports = function ($$$config) {
     return existingStateHook;
   }
   function useHostTransitionStatus() {
-    var status = readContext(HostTransitionContext);
-    return null !== status ? status : NotPendingTransition;
+    return readContext(HostTransitionContext);
   }
   function updateId() {
     return updateWorkInProgressHook().memoizedState;
@@ -10997,9 +10996,6 @@ module.exports = function ($$$config) {
     markRetryLaneImpl(fiber, retryLane);
     (fiber = fiber.alternate) && markRetryLaneImpl(fiber, retryLane);
   }
-  function emptyFindFiberByHostInstance() {
-    return null;
-  }
   var exports = {};
   ("use strict");
   var React = require("react"),
@@ -11062,6 +11058,9 @@ module.exports = function ($$$config) {
     reentry = !1,
     current = null,
     isArrayImpl = Array.isArray,
+    rendererVersion = $$$config.rendererVersion,
+    rendererPackageName = $$$config.rendererPackageName,
+    extraDevToolsConfig = $$$config.extraDevToolsConfig,
     getPublicInstance = $$$config.getPublicInstance,
     getRootHostContext = $$$config.getRootHostContext,
     getChildHostContext = $$$config.getChildHostContext,
@@ -11098,6 +11097,7 @@ module.exports = function ($$$config) {
     suspendInstance = $$$config.suspendInstance,
     waitForCommitToBeReady = $$$config.waitForCommitToBeReady,
     NotPendingTransition = $$$config.NotPendingTransition,
+    HostTransitionContext = $$$config.HostTransitionContext,
     resetFormInstance = $$$config.resetFormInstance;
   $$$config.bindToConsole;
   var supportsMicrotasks = $$$config.supportsMicrotasks,
@@ -11221,14 +11221,6 @@ module.exports = function ($$$config) {
     contextFiberStackCursor = createCursor(null),
     rootInstanceStackCursor = createCursor(null),
     hostTransitionProviderCursor = createCursor(null),
-    HostTransitionContext = {
-      $$typeof: REACT_CONTEXT_TYPE,
-      Provider: null,
-      Consumer: null,
-      _currentValue: null,
-      _currentValue2: null,
-      _threadCount: 0
-    },
     hydrationParentFiber = null,
     nextHydratableInstance = null,
     isHydrating = !1,
@@ -12147,44 +12139,29 @@ module.exports = function ($$$config) {
         return container.child.stateNode;
     }
   };
-  exports.injectIntoDevTools = function (devToolsConfig) {
-    devToolsConfig = {
-      bundleType: devToolsConfig.bundleType,
-      version: devToolsConfig.version,
-      rendererPackageName: devToolsConfig.rendererPackageName,
-      rendererConfig: devToolsConfig.rendererConfig,
-      overrideHookState: null,
-      overrideHookStateDeletePath: null,
-      overrideHookStateRenamePath: null,
-      overrideProps: null,
-      overridePropsDeletePath: null,
-      overridePropsRenamePath: null,
-      setErrorHandler: null,
-      setSuspenseHandler: null,
-      scheduleUpdate: null,
+  exports.injectIntoDevTools = function () {
+    var internals = {
+      bundleType: 0,
+      version: rendererVersion,
+      rendererPackageName: rendererPackageName,
       currentDispatcherRef: ReactSharedInternals,
-      findFiberByHostInstance:
-        devToolsConfig.findFiberByHostInstance || emptyFindFiberByHostInstance,
-      findHostInstancesForRefresh: null,
-      scheduleRefresh: null,
-      scheduleRoot: null,
-      setRefreshHandler: null,
-      getCurrentFiber: null,
-      reconcilerVersion: "19.0.0-www-modern-41ecbada-20240730"
+      findFiberByHostInstance: getInstanceFromNode,
+      reconcilerVersion: "19.0.0-www-modern-06d0b89e-20240801"
     };
-    if ("undefined" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__)
-      devToolsConfig = !1;
+    null !== extraDevToolsConfig &&
+      (internals.rendererConfig = extraDevToolsConfig);
+    if ("undefined" === typeof __REACT_DEVTOOLS_GLOBAL_HOOK__) internals = !1;
     else {
       var hook = __REACT_DEVTOOLS_GLOBAL_HOOK__;
-      if (hook.isDisabled || !hook.supportsFiber) devToolsConfig = !0;
+      if (hook.isDisabled || !hook.supportsFiber) internals = !0;
       else {
         try {
-          (rendererID = hook.inject(devToolsConfig)), (injectedHook = hook);
+          (rendererID = hook.inject(internals)), (injectedHook = hook);
         } catch (err) {}
-        devToolsConfig = hook.checkDCE ? !0 : !1;
+        internals = hook.checkDCE ? !0 : !1;
       }
     }
-    return devToolsConfig;
+    return internals;
   };
   exports.isAlreadyRendering = function () {
     return !1;
